@@ -11,8 +11,11 @@ torch.manualSeed(12);
 --1 data
 part = 1000
 tepart = 100
+valpart = 600
 numClass=15
 printter=0;
+valTests=0
+
 print('loading train data, size:')
 --f = torch.load('old_vow.t7','ascii')
 --imgs1 = f.images:type(torch.getdefaulttensortype());
@@ -106,6 +109,14 @@ teL = torch.LongTensor():resize(teL:size()):copy(teL)
 --end
 --print(teT)
 
+--validation data and labels
+print('loading validation data')
+vaD = imgs[{{part+tepart+1,part+tepart+valpart},{}}]:resize(valpart,28,28);
+vaL = labs[{{part+tepart+1,part+tepart+valpart}}]:resize(valpart);
+vaL = torch.LongTensor():resize(vaL:size()):copy(vaL)
+print(vaD:size())
+print(vaL:size())
+
 --********************
 --2 model
 nin = 28*28;
@@ -113,10 +124,16 @@ print('num of inputs =' .. nin);
 
 net= nn.Sequential()
 net:add(nn.SpatialConvolutionMM(1, 20, 5, 5))
-net:add(nn.Tanh())
+net:add(nn.SpatialBatchNormalization(20,1e-2))
+           --SpatialBatchNormalization
+net:add(nn.ReLU(true))
+--net:add(nn.Tanh())
 net:add(nn.SpatialMaxPooling(3, 3, 3, 3))
 net:add(nn.SpatialConvolutionMM(20, 40, 5, 5))
-net:add(nn.Tanh())
+net:add(nn.SpatialBatchNormalization(40,1e-2))
+           --SpatialBatchNormalization
+net:add(nn.ReLU(true))
+--net:add(nn.Tanh())
 net:add(nn.SpatialMaxPooling(2, 2, 2, 2))
 net:add(nn.Reshape(40*2*2))
 
@@ -126,7 +143,10 @@ net:add(nn.Linear(80, 15))
 
 net:add(nn.LogSoftMax())
 
+logger = io.open('ll/cons2.txt','a')
 print(net)
+logger:write('\n#############################################\n\n')
+logger:write(tostring(net))
 
 --********************
 --3 loss function
@@ -174,7 +194,7 @@ end
 
 -- optim meth
 losses = {}
-epochs =20
+epochs =0.5
 iter = epochs * math.ceil(part/batch)
 print('iter ='..iter);
 
@@ -194,8 +214,27 @@ optimMeth = optim.sgd
 
 for i=1,iter do
 	_, miniBLoss = optimMeth(feval,parm,optimState)
+
+	if valTests ==1 then
+		local vLosses={};
+		for j = 1,3 do
+			--if breaker==1 then break end
+			local vaDB = vaD[{{1+ valCount*200,200+valCount*200},{},{}}]:view(200,1,28,28);
+			local vaLB = vaL[{{1+ valCount*200,200+valCount*200}}];--:view(200,1,28,28);
+			local vOut = net:forward(vaDB);
+			local vLoss = criterion:forward(vOut,vaLB)/miniBLoss[1]
+			valCount = valCount+1;
+			if valCount==2 then valCount=0 end
+			vLosses[#vLosses +1]=vLoss;
+			--if (vLoss > 1.5 or vLoss<0.5) then breaker=1 end
+		end
+	end
+
 	if i % 10 == 0 then
 		print(string.format("minibatches %6s, loss = %6.6f",i,miniBLoss[1]))
+		if valTests==1 then
+			print(string.format("%6.6f, %6.6f, %6.6f",vLosses[1],vLosses[2],vLosses[3]));
+		end
 	end
 	losses[#losses + 1] = miniBLoss[1]
 end
@@ -227,15 +266,16 @@ for i=1,part do
 end
 
 print('train preds: '.. corr*100/part)
+logger:write('\n'..'train preds: '.. corr*100/part .. "\n")
+
 if printter==1 then
 	logFileName1 = 'log/output_cons2_train.txt';
 	fileout = io.open(logFileName1,'w');                                
-	io.output(fileout)                                                          
-	io.write("trL \t pred\n");                                                  
+	fileout:write("trL \t pred\n");                                                  
 	for i =1,part do                                                          
-		io.write(tostring(trL[i]) .. "\t" .. tostring(pred[i][1]) .. "\n");     
+		fileout:write(tostring(trL[i]) .. "\t" .. tostring(pred[i][1]) .. "\n");     
 	end                                                                         
-	io.close()     
+	fileout:close()
 end
 
 --test data output
@@ -257,15 +297,17 @@ for i=1,testON do
 end
 
 print('test preds: '.. corr*100/testON)
+logger:write('test preds: '.. corr*100/tepart .. "\n")
+logger:write('\n*********************************************')
+logger:close()
 if printter==1 then
 	logFileName2 = 'log/output_cons2_test.txt';
-	fileout = io.open(logFileName2,'w');                                
-	io.output(fileout)                                                          
-	io.write("teL \t pred\n");                                                  
-	for i =1,testON do                                                          
-		io.write(tostring(teL[i]) .. "\t" .. tostring(pred[i][1]) .. "\n");     
-	end                                                                         
-	io.close()     
+	fileout = io.open(logFileName2,'w');
+	fileout:write("teL \t pred\n"); 
+	for i =1,testON do
+		fileout:write(tostring(teL[i]) .. "\t" .. tostring(pred[i][1]) .. "\n");
+	end
+	fileout:close() 
 
 	dofile 'confusion.lua'
 end

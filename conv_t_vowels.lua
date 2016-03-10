@@ -13,6 +13,8 @@ part = 1000
 tepart = 30
 numClass=16
 printter=1;
+-- add validation tests ??
+
 print('loading train data, size:')
 f = torch.load('old_vow.t7','ascii')
 imgs1 = f.images:type(torch.getdefaulttensortype());
@@ -79,14 +81,14 @@ print(trL:size())
 --	torch.Tensor(trL),  -- y-coordinates (the training losses)
 --	'-'})
 
-print(type(trL))
+--print(type(trL))
 --print(labs[{{1,10},{}}])
-trT = torch.zeros(part,16);
-for i=1,part do
-	--print(trL[i])
-	local cc = trL[i]
-	trT[{ {i},{cc} }]=1
-end
+--trT = torch.zeros(part,16);
+--for i=1,part do
+--	--print(trL[i])
+--	local cc = trL[i]
+--	trT[{ {i},{cc} }]=1
+--end
 --trT:scatter(2,trL,trL)
 --print(trT[{{1},{}}]);print(trT[{{2},{}}]);print(trT[{{10},{}}]);
 
@@ -101,14 +103,12 @@ print(teD:size())
 print(teL:size())
 --print(teL)
 teL = torch.LongTensor():resize(teL:size()):copy(teL)
-teT = torch.zeros(teL:size(1),52);
---for i= 1,
-for i=1,teL:size(1) do
-	local cc = trL[i]
-	teT[{ {i},{cc} }]=1
-end
-
---
+--teT = torch.zeros(teL:size(1),16);
+----for i= 1,
+--for i=1,teL:size(1) do
+--	local cc = trL[i]
+--	teT[{ {i},{cc} }]=1
+--end
 --print(teT)
 
 --********************
@@ -118,9 +118,13 @@ print('num of inputs =' .. nin);
 
 net= nn.Sequential()
 net:add(nn.SpatialConvolutionMM(1, 50, 5, 5))
+--net:add(nn.SpatialBatchNormalization(40,1e-2))
+--net:add(nn.ReLU(true))
 net:add(nn.Tanh())
 net:add(nn.SpatialMaxPooling(3, 3, 3, 3))
 net:add(nn.SpatialConvolutionMM(50, 100, 5, 5))
+--net:add(nn.SpatialBatchNormalization(40,1e-2))
+--net:add(nn.ReLU(true))
 net:add(nn.Tanh())
 net:add(nn.SpatialMaxPooling(2, 2, 2, 2))
 net:add(nn.Reshape(100*2*2))
@@ -131,7 +135,10 @@ net:add(nn.Linear(100, 16))
 
 net:add(nn.LogSoftMax())
 
+logger = io.open('ll/vowel.txt','a')
 print(net)
+logger:write('\n#############################################\n\n')
+logger:write(tostring(net))
 
 --********************
 --3 loss function
@@ -179,7 +186,7 @@ end
 
 -- optim meth
 losses = {}
-epochs =20
+epochs =0.5
 iter = epochs * math.ceil(part/batch)
 print('iter ='..iter);
 
@@ -232,16 +239,16 @@ for i=1,part do
 end
 
 print('train preds: '.. corr*100/part)
+logger:write('\n'..'train preds: '.. corr*100/part .. "\n")
 
 if printter == 1 then
 	logFileName1 = 'log/output_vowels_train.txt';
 	fileout = io.open(logFileName1,'w');                                
-	io.output(fileout)                                                          
-	io.write("trL \t pred\n");                                                  
-	for i =1,part do                                                          
-		io.write(tostring(trL[i]) .. "\t" .. tostring(pred[i][1]) .. "\n");     
-	end                                                                         
-	io.close()     
+	fileout:write("trL \t pred\n");                                                  
+	for i =1,part do 
+		fileout:write(tostring(trL[i]) .. "\t" .. tostring(pred[i][1]) .. "\n");
+	end
+	fileout:close()     
 end
 
 --test data output
@@ -263,20 +270,22 @@ for i=1,testON do
 end
 
 print('test preds: '.. corr*100/testON)
+logger:write('test preds: '.. corr*100/tepart .. "\n")
+logger:write('\n*********************************************')
+logger:close()
 if printter == 1 then
 	logFileName2 = 'log/output_vowels_test.txt';
 	fileout = io.open(logFileName2,'w');                                
-	io.output(fileout)                                                          
-	io.write("teL \t pred\n");                                                  
-	for i =1,testON do                                                          
-		io.write(tostring(teL[i]) .. "\t" .. tostring(pred[i][1]) .. "\n");     
-	end                                                                         
-	io.close()     
+	fileout:write("teL \t pred\n");
+	for i =1,testON do 
+		fileout:write(tostring(teL[i]) .. "\t" .. tostring(pred[i][1]) .. "\n");
+	end   
+	fileout:close()     
 
 	dofile 'confusion.lua'
 end
---]]--
 
-
+--[[
+]]--
 
 
