@@ -12,7 +12,7 @@ torch.manualSeed(12);
 part = 4000
 tepart = 400
 numClass = 2;
-printer = 1;
+printer = 0
 
 print('loading train data, size:')
 f = torch.load('old_vow.t7','ascii')
