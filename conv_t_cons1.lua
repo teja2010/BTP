@@ -9,12 +9,12 @@ torch.manualSeed(12);
 
 --********************
 --1 data
-part = 4000
-valpart = 600;
-tepart = 400
+part = 8000
+valpart = 1200;
+tepart = 1000
 numClass=36
-printter=0;
-valTests=0;
+printter=1;
+valTests=1;
 
 print('loading train data, size:')
 --f = torch.load('old_vow.t7','ascii')
@@ -123,21 +123,46 @@ nin = 28*28;
 print('num of inputs =' .. nin);
 
 net= nn.Sequential()
-net:add(nn.SpatialConvolutionMM(1, 30, 5, 5))
-net:add(nn.SpatialBatchNormalization(30,1e-2))
+--[[
+net:add(nn.SpatialConvolutionMM(1, 60, 5, 5))
+net:add(nn.SpatialBatchNormalization(60,1e-3))
 net:add(nn.ReLU(true))
 --net:add(nn.Tanh())
 net:add(nn.SpatialMaxPooling(3, 3, 3, 3))
-net:add(nn.SpatialConvolutionMM(30, 60, 5, 5))
-net:add(nn.SpatialBatchNormalization(60,1e-2))
+net:add(nn.SpatialConvolutionMM(60, 120, 5, 5))
+net:add(nn.SpatialBatchNormalization(120,1e-3))
 net:add(nn.ReLU(true))
 --net:add(nn.Tanh())
 net:add(nn.SpatialMaxPooling(2, 2, 2, 2))
-net:add(nn.Reshape(60*2*2))
+net:add(nn.Reshape(120*2*2))
 
-net:add(nn.Linear(60*2*2, 120))
+net:add(nn.Linear(120*2*2, 120))
 net:add(nn.Tanh())
 net:add(nn.Linear(120, 36))
+]]--
+
+net:add(nn.SpatialConvolutionMM(1, 60, 3,3))
+net:add(nn.SpatialBatchNormalization(60,5e-2))
+net:add(nn.ReLU(true))
+--net:add(nn.Tanh())
+net:add(nn.SpatialMaxPooling(2,2,2,2))
+
+net:add(nn.SpatialConvolutionMM(60, 120, 3, 3))
+net:add(nn.SpatialBatchNormalization(120,5e-2))
+net:add(nn.ReLU(true))
+--net:add(nn.Tanh())
+net:add(nn.SpatialMaxPooling(2, 2, 2, 2))
+
+net:add(nn.SpatialConvolutionMM(120, 240, 3, 3))
+net:add(nn.SpatialBatchNormalization(240,5e-2))
+net:add(nn.ReLU(true))
+--net:add(nn.Tanh())
+net:add(nn.SpatialMaxPooling(2, 2, 1, 1))
+net:add(nn.Reshape(240*2*2))
+
+net:add(nn.Linear(240*2*2, 200))
+net:add(nn.Tanh())
+net:add(nn.Linear(200, 36))
 
 net:add(nn.LogSoftMax())
 
@@ -193,8 +218,6 @@ end
 -- optim meth
 losses = {}
 epochs =0.5
-iter = epochs * math.ceil(part/batch)
-print('iter ='..iter);
 
 optimState = {
 	learningRate = 1e-1,
@@ -211,31 +234,48 @@ optimMeth = optim.sgd
 --optimMeth = optim.lbfgs;
 valCount = 0;
 --breaker = 0;
-for i=1,iter do
-	_, miniBLoss = optimMeth(feval,parm,optimState)
-	
-	if valTests ==1 then
-		local vLosses={};
-		for j = 1,3 do
-			--if breaker==1 then break end
-			local vaDB = vaD[{{1+ valCount*200,200+valCount*200},{},{}}]:view(200,1,28,28);
-			local vaLB = vaL[{{1+ valCount*200,200+valCount*200}}];--:view(200,1,28,28);
-			local vOut = net:forward(vaDB);
-			local vLoss = criterion:forward(vOut,vaLB)/miniBLoss[1]
-			valCount = valCount+1;
-			if valCount==2 then valCount=0 end
-			vLosses[#vLosses +1]=vLoss;
-			--if (vLoss > 1.5 or vLoss<0.5) then breaker=1 end
+while epochs>0 do
+	iter = epochs * math.ceil(part/batch)
+	print('iter ='..iter);
+	for i=1,iter do
+		_, miniBLoss = optimMeth(feval,parm,optimState)
+		
+		if i % 10 == 0 then
+			if valTests ==1 then
+				vLosses={};
+				trLosses={};
+				for j = 1,2 do
+					--if breaker==1 then break end
+					local vaDB = vaD[{{1+ valCount*400,400+valCount*400},{},{}}]:view(400,1,28,28);
+					local vaLB = vaL[{{1+ valCount*400,400+valCount*400}}];--:view(200,1,28,28);
+					local vOut = net:forward(vaDB);
+					local vLoss = criterion:forward(vOut,vaLB)/miniBLoss[1]
+					
+					local trDB = trD[{{1+ valCount*400,400+valCount*400},{},{}}]:view(400,1,28,28);
+					local trLB = trL[{{1+ valCount*400,400+valCount*400}}];--:view(200,1,28,28);
+					local trOut = net:forward(trDB);
+					local trLoss = criterion:forward(trOut,trLB)--/miniBLoss[1]
+
+					valCount = valCount+1;
+					if valCount==2 then valCount=0 end
+					vLosses[#vLosses +1]=vLoss;
+					trLosses[#trLosses +1]=trLoss;
+					--if (vLoss > 1.5 or vLoss<0.5) then breaker=1 end
+				end
+			end
+
+			print(string.format("minibatches %6s, loss = %6.6f",i,miniBLoss[1]))
+			if valTests==1 then
+				print(string.format("%6.6f, %6.6f |  %6.6f, %6.6f",
+				vLosses[1],vLosses[2],trLosses[1],trLosses[2]))
+			end
 		end
+		losses[#losses + 1] = miniBLoss[1]
 	end
-	if i % 10 == 0 then
-		print(string.format("minibatches %6s, loss = %6.6f",i,miniBLoss[1]))
-		if valTests==1 then
-			print(string.format("%6.6f, %6.6f, %6.6f",vLosses[1],vLosses[2],vLosses[3]));
-		end
-	end
-	losses[#losses + 1] = miniBLoss[1]
+	print(epochs..' epoch over, continue ?');
+	epochs = io.read('*number');
 end
+
 
 --plot the losses
 gnuplot.pngfigure('log/conv2_cons1.png')

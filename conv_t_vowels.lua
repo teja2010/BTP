@@ -5,7 +5,7 @@ require 'math'
 require 'optim'
 require 'gnuplot'
 --require 'cunn'
-torch.manualSeed(12);
+torch.manualSeed(123);
 
 --********************
 --1 data
@@ -186,7 +186,7 @@ end
 
 -- optim meth
 losses = {}
-epochs =0.5
+epochs =5
 iter = epochs * math.ceil(part/batch)
 print('iter ='..iter);
 
